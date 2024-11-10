@@ -1,8 +1,8 @@
 import os
 import nltk
-origPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/venv"
-posPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/venv/data/pos"
-negPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/venv/data/neg"
+origPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/NLP-Coursework/venv"
+posPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/NLP-Coursework/venv/data/pos"
+negPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/NLP-Coursework/venv/data/neg"
 os.chdir(posPath)
 
 allFileList = []
@@ -135,7 +135,7 @@ for i in negFileList:
     lowerNeg.append(negTokenList)
     negTokenList = []
 
-
+#lowerNeg/pos are split up by document (list of documents that contain a list of words)
 lowerAllTok = []
 lowerAllTok.extend(lowerNeg)
 lowerAllTok.extend(lowerPos)
@@ -144,33 +144,56 @@ lowerAllTok.extend(lowerPos)
 
 fdistPos = nltk.FreqDist(allTokPos)
 fdistNeg = nltk.FreqDist(allTokNeg)
-# print(type(fdistPos))
-# print(fdistPos.most_common())
 
+# Only use terms that appear more than 50 times and less than 1000
+cutoffPos = {}
+cutoffNeg = {}
+for i in fdistPos.most_common():
+    if i[1] < 1000 and i[1] > 50:
+        cutoffPos[i[0]] = i[1]
+
+for i in fdistNeg.most_common():
+    if i[1] < 1000 and i[1] > 50:
+        cutoffNeg[i[0]] = i[1]
+print(cutoffPos)
 '''#Extract compositional phrases, possibly by PoS & Constituency parsing or frequently occurring n-grams
 
  PoS and constituency parsing to extract noun phrases into a list to add to my vocabulary'''
 
 # Extracting all Noun Phrases in the negative reviews
-nounPhrases = []
-for i in range(len(lowerNeg)):
-    tagged = nltk.pos_tag(lowerNeg[i])
-
-    chunker = nltk.RegexpParser("""
+nounPhrasesNeg = {}
+nounPhrasesPos = {}
+chunker = nltk.RegexpParser("""
                         NP: {<DT>?<JJ>*<NN>} #To extract Noun Phrases
                         P: {<IN>}            #To extract Prepositions
                         V: {<V.*>}           #To extract Verbs
                         PP: {<p> <NP>}       #To extract Prepositional Phrases
                         VP: {<V> <NP|PP>*}   #To extract Verb Phrases
                         """)
+for i in range(len(lowerPos)):
+    tagged = nltk.pos_tag(lowerPos[i])
     #construct the constituency tree
     tree = chunker.parse(tagged)
     # extract noun phrases
-    for subtree in tree.subtrees(filter=lambda t: t.label() == 'NP'):
+    for subtree in tree.subtrees(filter=lambda t: t.label() == 'VP'):
         myPhrase = ''
         for item in subtree.leaves():
             myPhrase += ' '+item[0]
-        nounPhrases.append(myPhrase.strip())
+        nounPhrasesPos[myPhrase.strip()] = nounPhrasesPos.get(myPhrase.strip(), 0) + 1
+
+
+for i in range(len(lowerNeg)):
+    tagged = nltk.pos_tag(lowerNeg[i])
+    #construct the constituency tree
+    tree = chunker.parse(tagged)
+    # extract noun phrases
+    for subtree in tree.subtrees(filter=lambda t: t.label() == 'VP'):
+        myPhrase = ''
+        for item in subtree.leaves():
+            myPhrase += ' '+item[0]
+        nounPhrasesNeg[myPhrase.strip()] = nounPhrasesNeg.get(myPhrase.strip(), 0) + 1
+print(nounPhrasesNeg)
+
 
 '''INCLUDE IN REPORT (Hard section, boosting features)'''
 
