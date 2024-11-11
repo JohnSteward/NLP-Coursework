@@ -1,15 +1,22 @@
 import os
 import nltk
 import math
-origPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/NLP-Coursework/venv"
-posPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/NLP-Coursework/venv/data/pos"
-negPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/NLP-Coursework/venv/data/neg"
+import sklearn.naive_bayes as nb
+# origPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/NLP-Coursework/venv"
+# posPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/NLP-Coursework/venv/data/pos"
+# negPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/NLP-Coursework/venv/data/neg"
+
+origPath = "C:/Users/John Steward/Work/NLP/NLP-Coursework/venv"
+posPath = "C:/Users/John Steward/Work/NLP/NLP-Coursework/venv/data/pos"
+negPath = "C:/Users/John Steward/Work/NLP/NLP-Coursework/venv/data/neg"
+
 os.chdir(posPath)
 
 allFileList = []
 
 posFileList = []
 negFileList = []
+trainingClasses = []
 
 evalList = []
 evalClasses = []
@@ -48,11 +55,12 @@ def TestFileRead(path):
 
 def calcIDFWord(term, docList):
     count = 0
-    print(len(docList))
     for i in docList:
         if term in i:
             count += 1
     return math.log((len(docList)/(count+1)), 10)
+
+
 
 posTrain = 0
 for file in os.listdir():
@@ -60,12 +68,15 @@ for file in os.listdir():
         path = posPath + '/' + file
         PosFileRead(path)
         posTrain += 1
+        trainingClasses.append(1)
     elif posTrain < 1800:
         path = posPath + '/' + file
         EvalFileRead(path)
+        evalClasses.append(1)
         posTrain += 1
     else:
         path = posPath + '/' + file
+        testClasses.append(1)
         TestFileRead(path)
 
 
@@ -76,21 +87,21 @@ for file in os.listdir():
     if negTrain < 1600:
         path = negPath + '/' + file
         NegFileRead(path)
+        trainingClasses.append(0)
         negTrain += 1
     elif negTrain < 1800:
         path = negPath + '/' + file
         EvalFileRead(path)
+        evalClasses.append(0)
         negTrain += 1
     else:
         path = negPath + '/' + file
+        testClasses.append(0)
         TestFileRead(path)
 
 
 
-# print(len(posFileList))
-# print(len(negFileList))
-# print(len(evalList))
-# print(len(testList))
+
 
 '''Tokenise the pieces of text and store the tokens in txt files'''
 
@@ -138,32 +149,43 @@ for i in negFileList:
     lowerNeg.append(negTokenList)
     negTokenList = []
 
+# getting tokens for the evaluation set
+allTokEval = []
+evalTokList = []
+lowerEval = []
+for i in evalList:
+    tokens = i.split(' ')
+    for token in tokens:
+        if '<' not in token and '>' not in token:
+            evalTokList.append(token.lower())
+            allTokEval.append(token.lower())
+    lowerEval.append(evalTokList)
+    evalTokList = []
+
+
 #lowerNeg/pos are split up by document (list of documents that contain a list of words)
 lowerAllTok = []
-lowerAllTok.extend(lowerNeg)
+allTok = []
+allTok.extend(allTokPos)
+allTok.extend(allTokNeg)
 lowerAllTok.extend(lowerPos)
-
+lowerAllTok.extend(lowerNeg)
 '''Test different cutoffs for term frequency'''
 
-fdistPos = nltk.FreqDist(allTokPos)
-fdistNeg = nltk.FreqDist(allTokNeg)
+fDist = nltk.FreqDist(allTok)
+#fdistNeg = nltk.FreqDist(allTokNeg)
 
 # Only use terms that appear more than 50 times and less than 1000
-cutoffPos = {}
-cutoffNeg = {}
-for i in fdistPos.most_common():
-    if i[1] < 1000 and i[1] > 50:
-        cutoffPos[i[0]] = i[1]
+cutoff = {}
+for i in fDist.most_common():
+    if i[1] < 500 and i[1] > 50:
+        cutoff[i[0]] = i[1]
 
-for i in fdistNeg.most_common():
-    if i[1] < 1000 and i[1] > 50:
-        cutoffNeg[i[0]] = i[1]
-print(cutoffPos)
 '''#Extract compositional phrases, possibly by PoS & Constituency parsing or frequently occurring n-grams
 
  PoS and constituency parsing to extract noun phrases into a list to add to my vocabulary'''
 
-# Extracting all Noun Phrases in the negative reviews
+# Extracting all Noun Phrases in the negative reviews (will need to mix this into everything)
 nounPhrasesNeg = {}
 nounPhrasesPos = {}
 chunker = nltk.RegexpParser("""
@@ -195,25 +217,43 @@ for i in range(len(lowerNeg)):
         for item in subtree.leaves():
             myPhrase += ' '+item[0]
         nounPhrasesNeg[myPhrase.strip()] = nounPhrasesNeg.get(myPhrase.strip(), 0) + 1
-print(nounPhrasesNeg)
 
 
 '''INCLUDE IN REPORT (Hard section, boosting features)'''
 
-
+print('done noun phrasing')
 '''Normalise, TF-IDF and one other method (maybe MRR) ALSO INCLUDE IN REPORT'''
-posIDF = {}
-negIDF = {}
+trainingIDFVals = []
+indivIDF = []
+evalIDFVals = []
+# Vectorising the terms in each document, keeping them consistent with each other
+for doc in lowerAllTok:
+    docFreq = {}
+    for i in cutoff:
+        if i not in doc:
+            docFreq[i] = 0
+        else:
+            # This is wrong, complete later
+            docFreq[i] = docFreq.get(i, 0) + 1
+        # indivIDF.append()
+    trainingIDFVals.append([docFreq[word] * calcIDFWord(word, lowerAllTok) for word in cutoff])
+print('done vectorising training')
+# Do the same with the eval set
+for doc in lowerEval:
+    docFreq = {}
+    for i in cutoff:
+        if i not in doc:
+            docFreq[i] = 0
+        else:
+            docFreq[i] = docFreq.get(i, 0) + 1
+    evalIDFVals.append([docFreq[word] * calcIDFWord(word, lowerAllTok) for word in cutoff])
 
-for word in cutoffPos:
-    posIDF[word] = cutoffPos[word] * calcIDFWord(word, lowerPos)
-print(posIDF)
-
-for word in cutoffNeg:
-    negIDF[word] = cutoffNeg[word] * calcIDFWord(word, lowerNeg)
-print(negIDF)
 '''Here we run all our experiments, show that our final combination is the best, show table of performance
 After this is where we will use our test set'''
-
-
+print('done eval training')
+classifier = nb.MultinomialNB()
+# For each doc, need to have the same word vector, but obv with different values (can use tf-idf or just the word count)
+classifier.fit(trainingIDFVals, trainingClasses)
+print('done fitting')
+print(classifier.score(evalIDFVals, evalClasses))
 #Implement our own NB algorithm INCLUDE CODE
