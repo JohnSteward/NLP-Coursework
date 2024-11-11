@@ -1,5 +1,6 @@
 import os
 import nltk
+import math
 origPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/NLP-Coursework/venv"
 posPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/NLP-Coursework/venv/data/pos"
 negPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/NLP-Coursework/venv/data/neg"
@@ -45,11 +46,13 @@ def TestFileRead(path):
         testList.append(fileContent)
         f.close()
 
-def calcTF(term):
-    pass
-
-def calcIDF(term):
-    pass
+def calcIDFWord(term, docList):
+    count = 0
+    print(len(docList))
+    for i in docList:
+        if term in i:
+            count += 1
+    return math.log((len(docList)/(count+1)), 10)
 
 posTrain = 0
 for file in os.listdir():
@@ -199,9 +202,16 @@ print(nounPhrasesNeg)
 
 
 '''Normalise, TF-IDF and one other method (maybe MRR) ALSO INCLUDE IN REPORT'''
+posIDF = {}
+negIDF = {}
 
+for word in cutoffPos:
+    posIDF[word] = cutoffPos[word] * calcIDFWord(word, lowerPos)
+print(posIDF)
 
-
+for word in cutoffNeg:
+    negIDF[word] = cutoffNeg[word] * calcIDFWord(word, lowerNeg)
+print(negIDF)
 '''Here we run all our experiments, show that our final combination is the best, show table of performance
 After this is where we will use our test set'''
 
