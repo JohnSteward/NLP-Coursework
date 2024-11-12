@@ -2,13 +2,13 @@ import os
 import nltk
 import math
 import sklearn.naive_bayes as nb
-# origPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/NLP-Coursework/venv"
-# posPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/NLP-Coursework/venv/data/pos"
-# negPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/NLP-Coursework/venv/data/neg"
+origPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/NLP-Coursework/venv"
+posPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/NLP-Coursework/venv/data/pos"
+negPath = "C:/Users/stewa/Year 4 Uni/NLP/Coursework/NLP-Coursework/venv/data/neg"
 
-origPath = "C:/Users/John Steward/Work/NLP/NLP-Coursework/venv"
-posPath = "C:/Users/John Steward/Work/NLP/NLP-Coursework/venv/data/pos"
-negPath = "C:/Users/John Steward/Work/NLP/NLP-Coursework/venv/data/neg"
+# origPath = "C:/Users/John Steward/Work/NLP/NLP-Coursework/venv"
+# posPath = "C:/Users/John Steward/Work/NLP/NLP-Coursework/venv/data/pos"
+# negPath = "C:/Users/John Steward/Work/NLP/NLP-Coursework/venv/data/neg"
 
 os.chdir(posPath)
 
@@ -180,7 +180,6 @@ cutoff = {}
 for i in fDist.most_common():
     if i[1] < 500 and i[1] > 50:
         cutoff[i[0]] = i[1]
-
 '''#Extract compositional phrases, possibly by PoS & Constituency parsing or frequently occurring n-grams
 
  PoS and constituency parsing to extract noun phrases into a list to add to my vocabulary'''
@@ -223,30 +222,26 @@ for i in range(len(lowerNeg)):
 
 print('done noun phrasing')
 '''Normalise, TF-IDF and one other method (maybe MRR) ALSO INCLUDE IN REPORT'''
+
+allIDF = {}
+for i in cutoff:
+    allIDF[i] = calcIDFWord(i, lowerAllTok)
+print('IDF done')
 trainingIDFVals = []
-indivIDF = []
 evalIDFVals = []
 # Vectorising the terms in each document, keeping them consistent with each other
 for doc in lowerAllTok:
-    docFreq = {}
+    docFreq = []
     for i in cutoff:
-        if i not in doc:
-            docFreq[i] = 0
-        else:
-            # This is wrong, complete later
-            docFreq[i] = docFreq.get(i, 0) + 1
-        # indivIDF.append()
-    trainingIDFVals.append([docFreq[word] * calcIDFWord(word, lowerAllTok) for word in cutoff])
+        docFreq.append(doc.count(i)*allIDF[i])
+    trainingIDFVals.append(docFreq)
 print('done vectorising training')
 # Do the same with the eval set
 for doc in lowerEval:
-    docFreq = {}
+    docFreq = []
     for i in cutoff:
-        if i not in doc:
-            docFreq[i] = 0
-        else:
-            docFreq[i] = docFreq.get(i, 0) + 1
-    evalIDFVals.append([docFreq[word] * calcIDFWord(word, lowerAllTok) for word in cutoff])
+        docFreq.append(doc.count(i)*allIDF[i])
+    evalIDFVals.append(docFreq)
 
 '''Here we run all our experiments, show that our final combination is the best, show table of performance
 After this is where we will use our test set'''
