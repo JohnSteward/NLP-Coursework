@@ -54,12 +54,28 @@ def TestFileRead(path):
         f.close()
 
 def calcIDFWord(term, docList):
+    # Need to include phrases in this
     count = 0
     for i in docList:
         if term in i:
             count += 1
     return math.log((len(docList)/(count+1)), 10)
 
+def extractPhrases(chunker, docList, dictionary, list):
+    for i in range(len(docList)):
+        tempList = []
+        tagged = nltk.pos_tag(docList[i])
+        # construct the constituency tree
+        tree = chunker.parse(tagged)
+        # extract noun phrases
+        for subtree in tree.subtrees(filter=lambda t: t.label() == 'VP'):
+            myPhrase = ''
+            for item in subtree.leaves():
+                myPhrase += ' ' + item[0]
+            dictionary[myPhrase.strip()] = dictionary.get(myPhrase.strip(), 0) + 1
+            phrases[myPhrase.strip()] = phrases.get(myPhrase.strip(), 0) + 1
+            tempList.append(myPhrase.strip())
+        list.append(tempList)
 
 
 posTrain = 0
@@ -178,15 +194,20 @@ fDist = nltk.FreqDist(allTok)
 # Only use terms that appear more than 50 times and less than 1000
 cutoff = {}
 for i in fDist.most_common():
-    if i[1] < 500 and i[1] > 50:
+    if i[1] < 600 and i[1] > 55:
         cutoff[i[0]] = i[1]
+
+# Calculating IDF of singular words, will do so with phrases later
+allIDF = {}
+for i in cutoff:
+    allIDF[i] = calcIDFWord(i, lowerAllTok)
+
+
 '''#Extract compositional phrases, possibly by PoS & Constituency parsing or frequently occurring n-grams
 
  PoS and constituency parsing to extract noun phrases into a list to add to my vocabulary'''
 
 # Extracting all Noun Phrases in the negative reviews (will need to mix this into everything)
-nounPhrasesNeg = {}
-nounPhrasesPos = {}
 chunker = nltk.RegexpParser("""
                         NP: {<DT>?<JJ>*<NN>} #To extract Noun Phrases
                         P: {<IN>}            #To extract Prepositions
@@ -194,28 +215,42 @@ chunker = nltk.RegexpParser("""
                         PP: {<p> <NP>}       #To extract Prepositional Phrases
                         VP: {<V> <NP|PP>*}   #To extract Verb Phrases
                         """)
-for i in range(len(lowerPos)):
-    tagged = nltk.pos_tag(lowerPos[i])
-    #construct the constituency tree
-    tree = chunker.parse(tagged)
-    # extract noun phrases
-    for subtree in tree.subtrees(filter=lambda t: t.label() == 'VP'):
-        myPhrase = ''
-        for item in subtree.leaves():
-            myPhrase += ' '+item[0]
-        nounPhrasesPos[myPhrase.strip()] = nounPhrasesPos.get(myPhrase.strip(), 0) + 1
 
+phrases = {}
+phraseDoc = []
 
-for i in range(len(lowerNeg)):
-    tagged = nltk.pos_tag(lowerNeg[i])
-    #construct the constituency tree
-    tree = chunker.parse(tagged)
-    # extract noun phrases
-    for subtree in tree.subtrees(filter=lambda t: t.label() == 'VP'):
-        myPhrase = ''
-        for item in subtree.leaves():
-            myPhrase += ' '+item[0]
-        nounPhrasesNeg[myPhrase.strip()] = nounPhrasesNeg.get(myPhrase.strip(), 0) + 1
+extractPhrases(chunker, lowerAllTok, cutoff, phraseDoc)
+print(phraseDoc)
+for i in phrases:
+    allIDF[i] = calcIDFWord(i, phraseDoc)
+# for i in range(len(lowerAllTok)):
+#     tagged = nltk.pos_tag(lowerAllTok[i])
+#     #construct the constituency tree
+#     tree = chunker.parse(tagged)
+#     # extract noun phrases
+#     for subtree in tree.subtrees(filter=lambda t: t.label() == 'VP'):
+#         myPhrase = ''
+#         for item in subtree.leaves():
+#             myPhrase += ' '+item[0]
+#         cutoff[myPhrase.strip()] = cutoff.get(myPhrase.strip(), 0) + 1
+#         phrases[myPhrase.strip()] = phrases.get(myPhrase.strip(), 0) + 1
+
+delItems = []
+for i in cutoff:
+    if cutoff[i] < 55 or cutoff[i] > 600:
+        delItems.append(i)
+for i in delItems:
+    del cutoff[i]
+# for i in range(len(lowerNeg)):
+#     tagged = nltk.pos_tag(lowerNeg[i])
+#     #construct the constituency tree
+#     tree = chunker.parse(tagged)
+#     # extract noun phrases
+#     for subtree in tree.subtrees(filter=lambda t: t.label() == 'VP'):
+#         myPhrase = ''
+#         for item in subtree.leaves():
+#             myPhrase += ' '+item[0]
+#         nounPhrasesNeg[myPhrase.strip()] = nounPhrasesNeg.get(myPhrase.strip(), 0) + 1
 
 
 '''INCLUDE IN REPORT (Hard section, boosting features)'''
@@ -223,24 +258,25 @@ for i in range(len(lowerNeg)):
 print('done noun phrasing')
 '''Normalise, TF-IDF and one other method (maybe MRR) ALSO INCLUDE IN REPORT'''
 
-allIDF = {}
-for i in cutoff:
-    allIDF[i] = calcIDFWord(i, lowerAllTok)
+
 print('IDF done')
 trainingIDFVals = []
 evalIDFVals = []
 # Vectorising the terms in each document, keeping them consistent with each other
+
+# SORT OUT ERROR IN LOGIC FOR PHRASES, NEED TO GO FURTHER INTO LIST
 for doc in lowerAllTok:
     docFreq = []
     for i in cutoff:
-        docFreq.append(doc.count(i)*allIDF[i])
+        docFreq.append((doc.count(i)+phraseDoc.count(i))*allIDF[i])
     trainingIDFVals.append(docFreq)
 print('done vectorising training')
+
 # Do the same with the eval set
 for doc in lowerEval:
     docFreq = []
     for i in cutoff:
-        docFreq.append(doc.count(i)*allIDF[i])
+        docFreq.append((doc.count(i)+phraseDoc.count(i))*allIDF[i])
     evalIDFVals.append(docFreq)
 
 '''Here we run all our experiments, show that our final combination is the best, show table of performance
