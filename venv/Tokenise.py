@@ -1,6 +1,7 @@
 import os
 import re
 import nltk
+import numpy as np
 from nltk import word_tokenize
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import stopwords
@@ -60,7 +61,6 @@ def TestFileRead(path):
         f.close()
 
 def calcIDFWord(term, docList):
-    # Need to include phrases in this
     count = 0
     for i in docList:
         if term in i:
@@ -119,8 +119,34 @@ def StemVocab(dictionary):
             lemma = lemmatiser.lemmatize(i)
             dictionary[lemma] = dictionary.pop(i)
 
-def NaiveBayes():
-    pass
+def NaiveBayesTrain(docs, classes):
+    print(len(docs[0]))
+    posIDF = np.zeros(len(docs[0]))
+    negIDF = np.zeros(len(docs[0]))
+    # P(Content|neg) * P(neg) >= P(Content|Pos) * P(pos)
+    # P(neg) = P(pos) so calculate P(content|class)
+    # Probability of each class is 0.5
+    for i in range(len(docs)):
+        for j in range(len(docs[i])):
+            if classes[i]:
+                posIDF[j] += docs[i][j]
+            else:
+                negIDF[j] += docs[i][j]
+    return posIDF, negIDF
+
+def NegNaiveBayes(testDoc, negIDF, totalIDF):
+    total = 0.5
+    for i in range(len(testDoc)):
+        if testDoc[i] != 0:
+            total *= negIDF[i] / totalIDF
+    return total
+
+def PosNaiveBayes(testDoc, posIDF, totalIDF):
+    total = 0.5
+    for i in range(len(testDoc)):
+        if testDoc[i] != 0:
+            total *= posIDF[i] / totalIDF
+    return total
 
 posTrain = 0
 for file in os.listdir():
@@ -246,9 +272,11 @@ lowerAllTok.extend(lowerNeg)
 print(allTok)
 '''Test different cutoffs for term frequency'''
 fDist = nltk.FreqDist(allTok)
+# posFDist = nltk.FreqDist(allTokPos)
+# negFDist = nltk.FreqDist(allTokNeg)
 minFreq = 75
 maxFreq = 850
-# Only use terms that appear more than 50 times and less than 1000
+# Only use terms that appear more than 75 times and less than 850
 phraseDoc = []
 cutoff = {}
 allNGrams = {}
@@ -261,9 +289,13 @@ for i in fDist.most_common():
         cutoff[i[0]] = i[1]
 # Calculating IDF of singular words, will do so with phrases later
 allIDF = {}
-
+# posIDF = {}
+# negIDF = {}
 for i in cutoff:
     allIDF[i] = calcIDFWord(i, lowerAllTok)
+    # posIDF[i] = calcIDFWord(i, lowerPos)
+    # negIDF[i] = calcIDFWord(i, lowerNeg)
+
 
 
 # Extracting all Noun Phrases in reviews
@@ -339,6 +371,7 @@ for doc in lowerAllTok:
         # tempList = []
     docFreq = []
     for i in cutoff:
+        # TF-IDF
         docFreq.append((doc.count(i)+phraseDoc[index].count(i))*allIDF[i])
     trainingIDFVals.append(docFreq)
     index += 1
@@ -348,6 +381,14 @@ print('done vectorising training')
 evalPhrase = []
 # Extracting all the noun phrases in the test data and comparing to the vocabulary (cutoff)
 #extractPhrasesTesting(chunker, lowerEval, evalPhrase)
+
+posIDF, negIDF = NaiveBayesTrain(trainingIDFVals, trainingClasses)
+posTotal = 0
+negTotal = 0
+for i in posIDF:
+    posTotal += i
+for i in negIDF:
+    negTotal += i
 
 index = 0
 print('extracted testing')
@@ -366,6 +407,7 @@ for doc in lowerEval:
         tempList = []
     docFreq = []
     for i in cutoff:
+        # TF-IDF
         docFreq.append((doc.count(i)+evalPhrase[index].count(i))*allIDF[i])
     evalIDFVals.append(docFreq)
     index += 1
@@ -373,9 +415,21 @@ for doc in lowerEval:
 '''Here we run all our experiments, show that our final combination is the best, show table of performance
 After this is where we will use our test set'''
 print('done eval vectorising')
-classifier = nb.MultinomialNB()
-# For each doc, need to have the same word vector, but obv with different values (can use tf-idf or just the word count)
-classifier.fit(trainingIDFVals, trainingClasses)
-print('done fitting')
-print(classifier.score(evalIDFVals, evalClasses))
+# classifier = nb.MultinomialNB()
+# # For each doc, need to have the same word vector, but obv with different values (can use tf-idf or just the word count)
+# classifier.fit(trainingIDFVals, trainingClasses)
+# print('done fitting')
+# print(classifier.score(evalIDFVals, evalClasses))
 #Implement our own NB algorithm INCLUDE CODE
+predClasses = []
+for i in evalIDFVals:
+    if NegNaiveBayes(i, negIDF, negTotal) >= PosNaiveBayes(i, posIDF, posTotal):
+        predClasses.append(0)
+    else:
+        predClasses.append(1)
+
+predScore = 0
+for i in range(len(predClasses)):
+    if predClasses[i] == evalClasses[i]:
+        predScore += 1
+print(predScore/len(predClasses))
